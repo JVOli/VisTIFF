@@ -508,3 +508,7 @@ if last_line_latlon:
         col_q.metric("Vazão Q (Manning)", f"{(discharge_q or 0):,.3f} m³/s")
 else:
     st.info("Nenhuma linha desenhada ainda.")
+
+with st.sidebar:
+    st.write("Developed by: João Vitor Cunha")
+    st.write("Contato: jvcunha031220@gmail.com")
