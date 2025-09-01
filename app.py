@@ -24,6 +24,8 @@ st.set_page_config(
     layout="wide",
 )
 
+with st.sidebar:
+    st.image("images/Logo.png", width=100)
 
 def open_dataset_from_bytes(file_bytes: bytes) -> rasterio.io.DatasetReader:
     """Open a rasterio dataset from raw bytes using MemoryFile."""
