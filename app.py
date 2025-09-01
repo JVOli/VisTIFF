@@ -235,11 +235,11 @@ with st.sidebar:
     box_radius = 0
     median_size = 3
     if smoothing_method == "Gaussiana":
-        gaussian_radius = st.slider("Raio da Gaussiana", 0.0, 10.0, 1.0, 0.1)
+        gaussian_radius = st.slider("Raio da Gaussiana", 0.0, 50.0, 1.0, 0.1)
     elif smoothing_method == "Média (caixa)":
-        box_radius = st.slider("Raio da média (caixa)", 0, 10, 1, 1)
+        box_radius = st.slider("Raio da média (caixa)", 0, 50, 1, 1)
     elif smoothing_method == "Mediana":
-        median_size = st.slider("Tamanho da janela (ímpar)", 3, 15, 3, 2)
+        median_size = st.slider("Tamanho da janela (ímpar)", 3, 50, 3, 2)
     overlay_opacity = st.slider("Opacidade do raster", 0.0, 1.0, 0.5, 0.01)
 
     st.write("Desenvolvido por: João Vitor Cunha")
