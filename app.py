@@ -24,14 +24,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# Read the image and convert to base64
-def get_base64_image(image_path):
-    with open(image_path, "rb") as img_file:
-        b64_data = base64.b64encode(img_file.read()).decode()
-    return b64_data
-
-# Load base64 image
-logo_base64 = get_base64_image("logotipo_iph.png")
 
 def open_dataset_from_bytes(file_bytes: bytes) -> rasterio.io.DatasetReader:
     """Open a rasterio dataset from raw bytes using MemoryFile."""
