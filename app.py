@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 # --------------- Helpers: Raster I/O and Rendering ---------------
 
 st.set_page_config(
-    page_icon="images/Logo.png",
+    page_icon="images/Logo_semtexto.png",
     layout="wide",
 )
 
