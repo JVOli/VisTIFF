@@ -5,7 +5,7 @@ Aplicativo Streamlit para visualizar GeoTIFFs, aplicar suavização diretamente 
 ### Recursos principais
 - **Upload de GeoTIFF**: suporte a múltiplos arquivos `.tif/.tiff`.
 - **Visualização em mapa**: reprojeção automática para EPSG:4326 com diferentes mapas de cores.
-- **Suavização aplicada aos dados**: Gaussiana, Média (caixa) e Mediana. A suavização afeta tanto a visualização quanto o cálculo do perfil e das vazões.
+- **Suavização aplicada aos dados**: Gaussiana, Média (caixa) e Mediana.
 - **Perfis longitudinais**: desenhe uma linha no mapa e extraia o perfil da banda selecionada.
 - **Métricas e hidráulica**: estatísticas básicas, área abaixo de um nível, perímetro molhado, raio hidráulico e vazão via equação de Manning.
 - **CRS**: permite informar um CRS manualmente quando ausente/incorreto no raster.
@@ -54,7 +54,7 @@ O app abrirá no navegador padrão (geralmente em `http://localhost:8501`).
 - A suavização é aplicada diretamente às bandas do raster em `float32`. Áreas sem dados são mantidas como NaN e ficam transparentes na visualização.
 
 ### Perfil e hidráulica
-- O perfil é muestreado ao longo da linha desenhada, com passo ~1 pixel no CRS do raster.
+- O perfil é mostrado ao longo da linha desenhada, com passo ~1 pixel no CRS do raster.
 - Estatísticas básicas: mínimo, máximo e média.
 - Área abaixo do nível: integração trapezoidal onde o perfil está abaixo do nível.
 - Vazão (Manning): `Q = (1/n) · A · R^(2/3) · S^(1/2)`.
