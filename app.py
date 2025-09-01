@@ -510,5 +510,5 @@ else:
     st.info("Nenhuma linha desenhada ainda.")
 
 with st.sidebar:
-    st.write("Developed by: João Vitor Cunha")
+    st.write("Desenvolvido por: João Vitor Cunha")
     st.write("Contato: jvcunha031220@gmail.com")
