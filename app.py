@@ -19,6 +19,11 @@ import plotly.graph_objects as go
 
 # --------------- Helpers: Raster I/O and Rendering ---------------
 
+st.set_page_config(
+    page_icon="images/Logo.png",
+    layout="wide",
+)
+
 def open_dataset_from_bytes(file_bytes: bytes) -> rasterio.io.DatasetReader:
     """Open a rasterio dataset from raw bytes using MemoryFile."""
     memfile = MemoryFile(file_bytes)
