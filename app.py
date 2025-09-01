@@ -368,6 +368,25 @@ if last_line_latlon:
             step=0.1,
             help="Valor de referência horizontal. A área calculada considera (nível - perfil) quando o perfil está abaixo do nível.",
         )
+        col_n, col_s = st.columns(2)
+        with col_n:
+            manning_n = st.number_input(
+                "Coeficiente de Manning n",
+                value=0.030,
+                min_value=0.000,
+                step=0.005,
+                format="%.5f",
+                help="Rugosidade. Ex.: 0,012 (canal liso) a 0,05+ (natural rugoso)."
+            )
+        with col_s:
+            slope_s = st.number_input(
+                "Declividade hidráulica S",
+                value=0.001,
+                min_value=0.000,
+                step=0.0001,
+                format="%.5f",
+                help="Declividade de energia (adimensional). Aproximar pela declividade do escoamento."
+            )
 
         # Inserir pontos de interseção com o nível para interpolar corretamente
         x = distances_m.astype(float)
@@ -455,6 +474,29 @@ if last_line_latlon:
         diff = level - y_area
         diff = np.where(np.isfinite(diff), diff, 0.0)
         area_under = float(np.trapz(diff, xx))
-        st.metric("Área abaixo do nível", f"{area_under:,.2f} (valor×m)")
+        st.metric("Área abaixo do nível", f"{area_under:,.2f} m²")
+
+        # Perímetro molhado: soma dos comprimentos ao longo do leito submerso
+        wetted_perimeter = 0.0
+        for i in range(len(xx) - 1):
+            yi = yy[i]
+            yj = yy[i + 1]
+            if (yi <= level) and (yj <= level):
+                dx = xx[i + 1] - xx[i]
+                dy = yj - yi
+                wetted_perimeter += float(np.hypot(dx, dy))
+
+        # Raio hidráulico e vazão pela equação de Manning: Q = (1/n) * A * R^(2/3) * S^(1/2)
+        discharge_q = None
+        hydraulic_radius = None
+        if area_under > 0 and wetted_perimeter > 0 and manning_n > 0 and slope_s >= 0:
+            hydraulic_radius = area_under / wetted_perimeter
+            discharge_q = (1.0 / manning_n) * area_under * (hydraulic_radius ** (2.0 / 3.0)) * (slope_s ** 0.5)
+
+        col_a, col_p, col_r, col_q = st.columns(4)
+        col_a.metric("Área molhada A", f"{area_under:,.2f} m²")
+        col_p.metric("Perímetro molhado P", f"{wetted_perimeter:,.2f} m")
+        col_r.metric("Raio hidráulico R", f"{(hydraulic_radius or 0):,.4f} m")
+        col_q.metric("Vazão Q (Manning)", f"{(discharge_q or 0):,.3f} m³/s")
 else:
     st.info("Nenhuma linha desenhada ainda.")
