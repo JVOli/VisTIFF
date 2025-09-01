@@ -4,7 +4,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import streamlit as st
-from PIL import Image, ImageFilter
+from PIL import Image
+from scipy import ndimage as ndi
 from matplotlib import cm, colors
 from pyproj import CRS, Transformer
 from shapely.geometry import LineString
@@ -93,6 +94,10 @@ def get_raster_preview_to_4326(
         # Set alpha 0 for nodata
         if nodata is not None:
             rgba[nodata_mask, 3] = 0
+        # Set alpha 0 for NaN as well
+        nan_mask = ~np.isfinite(dst)
+        if np.any(nan_mask):
+            rgba[nan_mask, 3] = 0
 
         img = rgba
     else:
@@ -221,10 +226,10 @@ with st.sidebar:
         index=0,
     )
     smoothing_method = st.selectbox(
-        "Suavização do raster (visualização)",
+        "Suavização do raster (aplicada aos dados)",
         ["Nenhuma", "Gaussiana", "Média (caixa)", "Mediana"],
         index=0,
-        help="Aplica um filtro na imagem renderizada do raster para suavizar o visual."
+        help="Aplica filtro diretamente nos dados do raster. Afeta visualização e perfil/vazões."
     )
     gaussian_radius = 0.0
     box_radius = 0
@@ -254,7 +259,138 @@ for f in uploaded_files:
 
 all_names = list(st.session_state["rasters"].keys())
 active_name = st.selectbox("Selecione o raster ativo", all_names, index=0)
-file_bytes = st.session_state["rasters"][active_name]
+file_bytes_original = st.session_state["rasters"][active_name]
+
+# Cache para rasters suavizados
+if "rasters_smoothed" not in st.session_state:
+    st.session_state["rasters_smoothed"] = {}
+
+def _apply_smoothing_to_array(
+    arr: np.ndarray,
+    method: str,
+    gaussian_radius: float,
+    box_radius: int,
+    median_size: int,
+) -> np.ndarray:
+    # Normalizar nulos em NaN
+    arr = arr.astype(np.float32, copy=False)
+    finite_mask = np.isfinite(arr)
+    if method == "Gaussiana":
+        # Convolução normalizada para ignorar NaN
+        data = np.where(finite_mask, arr, 0.0)
+        weight = finite_mask.astype(np.float32)
+        sigma = max(gaussian_radius, 0.0)
+        if sigma == 0.0:
+            return arr
+        data_blur = ndi.gaussian_filter(data, sigma=sigma, mode="nearest")
+        weight_blur = ndi.gaussian_filter(weight, sigma=sigma, mode="nearest")
+        out = np.divide(
+            data_blur,
+            np.maximum(weight_blur, 1e-6),
+            out=np.zeros_like(arr, dtype=np.float32),
+        )
+        out[weight_blur < 1e-6] = np.nan
+        return out
+    elif method == "Média (caixa)":
+        size = int(max(0, box_radius) * 2 + 1)
+        if size <= 1:
+            return arr
+        data = np.where(finite_mask, arr, 0.0)
+        weight = finite_mask.astype(np.float32)
+        data_blur = ndi.uniform_filter(data, size=size, mode="nearest")
+        weight_blur = ndi.uniform_filter(weight, size=size, mode="nearest")
+        out = np.divide(
+            data_blur,
+            np.maximum(weight_blur, 1e-6),
+            out=np.zeros_like(arr, dtype=np.float32),
+        )
+        out[weight_blur < 1e-6] = np.nan
+        return out
+    elif method == "Mediana":
+        size = int(median_size)
+        if size < 3:
+            return arr
+        if size % 2 == 0:
+            size += 1
+        # Preencher NaN com valores existentes para evitar enviesamento severo
+        # Aqui optamos por copiar os dados; NaNs permanecerão NaN nas áreas sem vizinhos válidos após filtro
+        filled = np.where(finite_mask, arr, np.nan)
+        # scipy.median_filter não ignora NaN; substituímos NaN por valor local via nearest antes
+        # Aproximação: usar interpolação nearest por convolução do mask
+        # Fallback simples: substituir NaN por média local (box pequena) antes do mediano
+        pre_size = 3
+        data = np.where(finite_mask, arr, 0.0)
+        weight = finite_mask.astype(np.float32)
+        local_mean = ndi.uniform_filter(data, size=pre_size, mode="nearest") / np.maximum(
+            ndi.uniform_filter(weight, size=pre_size, mode="nearest"), 1e-6
+        )
+        seed = np.where(finite_mask, arr, local_mean)
+        out = ndi.median_filter(seed, size=size, mode="nearest").astype(np.float32)
+        # Reaplicar NaN onde não havia dados em uma janela grande
+        big_weight = ndi.uniform_filter(weight, size=size, mode="nearest")
+        out[big_weight < 1e-6] = np.nan
+        return out
+    else:
+        return arr
+
+def smooth_raster_bytes(
+    file_bytes: bytes,
+    method: str,
+    gaussian_radius: float,
+    box_radius: int,
+    median_size: int,
+) -> bytes:
+    with open_dataset_from_bytes(file_bytes) as src:
+        meta = src.meta.copy()
+        width, height, count = src.width, src.height, src.count
+        # Forçar saída em float32 para manter decimais e NaN
+        meta.update(dtype="float32", nodata=None)
+        bands_out = []
+        # Tentamos usar nodata do raster para mapear em NaN
+        for b in range(1, count + 1):
+            arr = src.read(b).astype(np.float32)
+            nodata_val = None
+            if src.nodatavals and len(src.nodatavals) >= b:
+                nodata_val = src.nodatavals[b - 1]
+            if nodata_val is not None:
+                arr = np.where(np.isclose(arr, float(nodata_val)), np.nan, arr)
+            out = _apply_smoothing_to_array(arr, method, gaussian_radius, box_radius, median_size)
+            bands_out.append(out.astype(np.float32))
+
+        mem = MemoryFile()
+        with mem.open(
+            driver="GTiff",
+            width=width,
+            height=height,
+            count=count,
+            dtype="float32",
+            crs=src.crs,
+            transform=src.transform,
+        ) as dst:
+            for b in range(count):
+                dst.write(bands_out[b], b + 1)
+        smoothed_bytes = mem.read()
+        mem.close()
+        return smoothed_bytes
+
+# Preparar bytes ativos (original ou suavizado)
+file_bytes = file_bytes_original
+if smoothing_method != "Nenhuma":
+    smooth_key = (active_name, smoothing_method, float(gaussian_radius), int(box_radius), int(median_size))
+    if smooth_key not in st.session_state["rasters_smoothed"]:
+        with st.spinner("Aplicando suavização ao raster..."):
+            try:
+                st.session_state["rasters_smoothed"][smooth_key] = smooth_raster_bytes(
+                    file_bytes_original,
+                    smoothing_method,
+                    gaussian_radius,
+                    box_radius,
+                    median_size,
+                )
+            except Exception as e:
+                st.warning(f"Falha ao suavizar raster: {e}")
+                st.session_state["rasters_smoothed"][smooth_key] = file_bytes_original
+    file_bytes = st.session_state["rasters_smoothed"][smooth_key]
 
 with open_dataset_from_bytes(file_bytes) as ds_meta:
     st.subheader("Metadados do raster ativo")
@@ -299,20 +435,6 @@ with open_dataset_from_bytes(file_bytes) as ds_meta:
         img, (min_lon, min_lat, max_lon, max_lat) = get_raster_preview_to_4326(
             ds_meta, band_indexes, max_size=1024, colormap_name=colormap_name, src_crs=override_crs or ds_meta.crs
         )
-        # Aplicar suavização na imagem renderizada, se selecionado
-        if smoothing_method != "Nenhuma":
-            try:
-                mode = "RGBA" if img.shape[2] == 4 else "RGB"
-                pil_img = Image.fromarray(img, mode=mode)
-                if smoothing_method == "Gaussiana":
-                    pil_img = pil_img.filter(ImageFilter.GaussianBlur(radius=gaussian_radius))
-                elif smoothing_method == "Média (caixa)":
-                    pil_img = pil_img.filter(ImageFilter.BoxBlur(radius=box_radius))
-                elif smoothing_method == "Mediana":
-                    pil_img = pil_img.filter(ImageFilter.MedianFilter(size=median_size))
-                img = np.array(pil_img)
-            except Exception as e:
-                st.warning(f"Falha ao aplicar suavização: {e}")
     except Exception as e:
         st.error(
             "Não foi possível reprojetar o raster para visualização. Informe um CRS válido (ex.: EPSG:4326, EPSG:31983) e tente novamente.\n" 
