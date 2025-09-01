@@ -235,7 +235,7 @@ with st.sidebar:
     box_radius = 0
     median_size = 3
     if smoothing_method == "Gaussiana":
-        gaussian_radius = st.slider("Raio da Gaussiana", 0.0, 50.0, 1.0, 1)
+        gaussian_radius = st.slider("Raio da Gaussiana", 0.0, 50.0, 0, 1)
     elif smoothing_method == "Média (caixa)":
         box_radius = st.slider("Raio da média (caixa)", 0, 50, 1, 1)
     elif smoothing_method == "Mediana":
