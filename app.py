@@ -220,7 +220,10 @@ with st.sidebar:
         ],
         index=0,
     )
-    overlay_opacity = st.slider("Opacidade do raster", 0.0, 1.0, 0.8, 0.05)
+    overlay_opacity = st.slider("Opacidade do raster", 0.0, 1.0, 0.5, 0.01)
+
+    st.write("Desenvolvido por: João Vitor Cunha")
+    st.write("Contato: jvcunha031220@gmail.com")
 
 if not uploaded_files:
     st.info("Envie ao menos um arquivo GeoTIFF para começar.")
@@ -509,6 +512,3 @@ if last_line_latlon:
 else:
     st.info("Nenhuma linha desenhada ainda.")
 
-with st.sidebar:
-    st.write("Desenvolvido por: João Vitor Cunha")
-    st.write("Contato: jvcunha031220@gmail.com")
