@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import streamlit as st
-from PIL import Image
+from PIL import Image, ImageFilter
 from matplotlib import cm, colors
 from pyproj import CRS, Transformer
 from shapely.geometry import LineString
@@ -220,6 +220,21 @@ with st.sidebar:
         ],
         index=0,
     )
+    smoothing_method = st.selectbox(
+        "Suavização do raster (visualização)",
+        ["Nenhuma", "Gaussiana", "Média (caixa)", "Mediana"],
+        index=0,
+        help="Aplica um filtro na imagem renderizada do raster para suavizar o visual."
+    )
+    gaussian_radius = 0.0
+    box_radius = 0
+    median_size = 3
+    if smoothing_method == "Gaussiana":
+        gaussian_radius = st.slider("Raio da Gaussiana", 0.0, 10.0, 1.0, 0.1)
+    elif smoothing_method == "Média (caixa)":
+        box_radius = st.slider("Raio da média (caixa)", 0, 10, 1, 1)
+    elif smoothing_method == "Mediana":
+        median_size = st.slider("Tamanho da janela (ímpar)", 3, 15, 3, 2)
     overlay_opacity = st.slider("Opacidade do raster", 0.0, 1.0, 0.5, 0.01)
 
     st.write("Desenvolvido por: João Vitor Cunha")
@@ -284,6 +299,20 @@ with open_dataset_from_bytes(file_bytes) as ds_meta:
         img, (min_lon, min_lat, max_lon, max_lat) = get_raster_preview_to_4326(
             ds_meta, band_indexes, max_size=1024, colormap_name=colormap_name, src_crs=override_crs or ds_meta.crs
         )
+        # Aplicar suavização na imagem renderizada, se selecionado
+        if smoothing_method != "Nenhuma":
+            try:
+                mode = "RGBA" if img.shape[2] == 4 else "RGB"
+                pil_img = Image.fromarray(img, mode=mode)
+                if smoothing_method == "Gaussiana":
+                    pil_img = pil_img.filter(ImageFilter.GaussianBlur(radius=gaussian_radius))
+                elif smoothing_method == "Média (caixa)":
+                    pil_img = pil_img.filter(ImageFilter.BoxBlur(radius=box_radius))
+                elif smoothing_method == "Mediana":
+                    pil_img = pil_img.filter(ImageFilter.MedianFilter(size=median_size))
+                img = np.array(pil_img)
+            except Exception as e:
+                st.warning(f"Falha ao aplicar suavização: {e}")
     except Exception as e:
         st.error(
             "Não foi possível reprojetar o raster para visualização. Informe um CRS válido (ex.: EPSG:4326, EPSG:31983) e tente novamente.\n" 
